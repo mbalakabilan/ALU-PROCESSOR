@@ -1,0 +1,245 @@
+module turbo(
+input clk,
+input reset,
+output reg[0:3] pc
+//PROCESSOR
+);
+always@(posedge clk)begin
+if(reset)
+pc<=4'b0000;
+else
+pc<=pc+1'b1;
+end
+endmodule
+//instruction
+module ins(
+input[0:3]adress,
+output reg[0:15]instruct
+);
+reg[0:15]memory[0:15];
+
+initial begin
+    memory[0] = 16'b0001001100010010; // ADD R1,R2 -> R3
+    memory[1] = 16'b0010010000010010; // SUB R1,R2 -> R4
+    memory[2] = 16'b0100011111110000; // MUL R15,R15 -> R7
+    memory[3]=16'b1000011000010010;   // DIV R1/R2 -> R6
+
+end
+always@(*)begin
+instruct=memory[adress];
+end
+endmodule
+   //decoder
+module dec(
+output reg [0:3]operation,
+input reg[0:15]instruction,
+output reg [0:3]store,
+output reg [0:3]src_1,
+output reg [0:3]src_2,
+output reg write,
+output reg [0:3]select
+);
+always@(*) begin
+operation=instruction[0:3];
+store=instruction[4:7];
+src_1=instruction[8:11];
+src_2=instruction[12:15];
+select=4'b0000;
+write=1'b0;
+
+case(operation)
+4'b0001:begin
+select=4'b0001;
+write=1'b1;
+end
+4'b0010:begin
+select=4'b0010;
+write=1'b1;
+end
+4'b0100:begin
+select=4'b0100;
+write=1'b1;
+end
+4'b1000:begin
+select=4'b1000;
+write=1'b1;
+end
+endcase
+end
+endmodule
+//REGISTER FILE
+module reg_file(
+input clk,
+input reset,
+input write_enable,
+input[0:3]read_addres1,
+input[0:3]read_addres2,
+input[0:3]write_adress,
+input[0:15]write_data,
+output[0:15]read_data1,
+output[0:15]read_data2
+);
+integer i;
+reg[0:15]register[0:15];
+always @(posedge clk)begin
+if(reset)
+for(i=0;i<16;i=i+1)
+register[i]<=16'b0;
+
+else if(write_enable)begin
+register[write_adress]<=write_data;
+end
+end
+assign read_data1=register[read_addres1];
+assign read_data2=register[read_addres2];
+
+endmodule
+     //alu
+module alu(
+input[0:15]a,
+input[0:15]b,
+input[0:3]operation,
+//output reg[0:15]data,
+output reg[0:15]result
+);
+//reg[0:15]memory[0:15];
+always@(*)begin
+case(operation)
+4'b0001:
+result=a+b;
+4'b0010:
+result=a-b;
+4'b0100:
+result=a*b;
+4'b1000:
+result=a/b;
+default:
+result=16'b0;
+endcase
+//end
+//data=memory[instruct];
+end
+endmodule
+//data memory
+module datamemory(
+input clk,
+input mem_read,
+input mem_write,
+input[0:3]address,
+output reg [15:0]read_data,
+input [15:0]write_data
+);
+reg[0:15]memory[0:255];
+always @(posedge clk)begin
+if (mem_write)begin
+memory[address]<=write_data;
+end
+end
+always @(*)begin
+if(mem_read)begin
+read_data<=memory[address];
+end
+else
+read_data=16'b0;
+end
+endmodule
+
+//---------------------- PROCESSOR TURBO-------------------///
+
+//----->PC
+module turbo_cpu(
+input clk,
+input reset,
+output[0:3]pc
+);
+wire[0:3]pc_wire;
+wire[0:15]ins_wire;
+wire[0:3]operation_wire;
+wire[0:3]src_1_wire;
+wire[0:3]src_2_wire;
+wire[0:3]store_wire;
+wire[0:3]select_wire;
+wire write_wire;
+wire[0:15]read_data1_wire;
+wire[0:15]read_data2_wire;
+wire[0:15]write_data_wire;
+wire[0:15]result_wire;
+wire[0:15]read_data_wire;
+wire[0:15]alu_result;
+wire mem_read;
+wire mem_write;
+wire[0:3] address;
+
+
+
+
+//-----BLOCK 1--PC---------//
+
+turbo b1(
+.reset(reset),
+.clk(clk),
+.pc(pc_wire));
+
+//-----INSTRUCTION -BLOCK 2----------//
+
+ins b2(
+.adress(pc_wire),.instruct(ins_wire));
+
+//-------DECODER-BLOCK 3--------//
+
+dec b3(
+.instruction(ins_wire),
+.operation(operation_wire),
+.src_1(src_1_wire),
+.src_2(src_2_wire),
+.store(store_wire),
+.select(select_wire),
+.write(write_wire));
+
+//---------REGISTER_FILE---BLOCK-4---------//
+
+reg_file b4(
+.clk(clk),
+.reset(reset),
+.write_enable(write_wire),
+.read_addres1(src_1_wire),
+.read_addres2(src_2_wire),
+.write_adress(store_wire),
+.read_data1(read_data1_wire),
+.read_data2(read_data2_wire),
+.write_data(write_data_wire));
+
+//---------ALU--BLOCK-5--------------------///
+
+alu b5(
+.a(read_data1_wire),
+.b(read_data2_wire),
+.operation(operation_wire),
+.result(result_wire));
+
+//----------DATA-MEMORY-6---------------------////
+
+/*datamemory b6(
+.clk(clk),
+.mem_read(mem_read),
+.mem_write(mem_write),
+.address(address),
+.write_data(result_wire),
+.read_data(read_data_wire)
+);*/
+assign alu_result=result_wire;
+assign write_data_wire=result_wire;
+assign pc=pc_wire;
+
+
+
+endmodule
+
+
+
+
+
+
+
+
+
